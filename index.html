@@ -1,567 +1,468 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Suika 🍉</title>
+<title>Suika</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;overscroll-behavior:none}
 body{
- background:linear-gradient(135deg,#dce9df,#cbdcd2,#e9e7d9);
- color:#344b40;text-align:center;
- font-family:system-ui,sans-serif;padding:12px 8px 25px;
+  margin:0;padding:20px 12px 35px;
+  background:#e9eee7;color:#34443a;
+  font-family:system-ui,sans-serif;text-align:center
 }
-h1{margin:4px 0 12px;color:#426b54;font-size:32px}
-.panel,.savebox,.evolution,.controls{
- max-width:460px;margin:12px auto;
- background:#ffffffbd;border:1px solid white;
- border-radius:20px;padding:12px;
- box-shadow:0 7px 20px #617c6830;
+h1{margin:4px 0 12px;font-size:32px}
+.panel{
+  max-width:460px;margin:0 auto 12px;padding:12px;
+  background:#fff;border-radius:18px;
+  box-shadow:0 4px 15px #52634b18
 }
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
-.stat{background:#e7eee7;border-radius:13px;padding:8px 3px}
-.stat small{display:block;font-size:11px;color:#607568}
-.stat strong{font-size:21px;color:#365c45}
+.stats{display:flex;justify-content:space-around;gap:8px}
+.stat{flex:1;background:#f1f5ee;border-radius:12px;padding:8px}
+.stat strong{display:block;font-size:22px}
+.stat small{color:#718071}
+button,select{
+  border:0;border-radius:12px;padding:10px 14px;
+  font-size:15px;background:#dce9d8;color:#34443a;
+  cursor:pointer;margin:3px
+}
+button:active{transform:scale(.97)}
+.primary{background:#83ad83;color:white}
 #game{
- position:relative;width:min(100%,420px);
- height:500px;max-height:70vh;min-height:350px;
- margin:12px auto 5px;overflow:hidden;
- border:4px solid white;border-radius:17px;
- background:#e8efe5;touch-action:none;
- box-shadow:inset 0 0 18px #ffffffaa,0 5px 15px #637a6850;
+  position:relative;width:min(420px,96vw);
+  height:500px;margin:auto;overflow:hidden;
+  border:5px solid #9db49a;border-radius:18px;
+  background:#f8f8ef;touch-action:none
 }
-canvas{width:100%;height:100%;display:block;touch-action:none}
+canvas{display:block;width:100%;height:100%}
 #message{
- display:none;position:absolute;inset:0;z-index:5;
- align-items:center;justify-content:center;
- flex-direction:column;background:#344b40dd;color:white;
+  position:absolute;inset:0;display:none;
+  align-items:center;justify-content:center;
+  flex-direction:column;background:#ffffffd9;
+  font-size:25px;font-weight:bold
 }
-#message h2{font-size:32px}
-button{
- border:0;border-radius:30px;padding:11px 18px;margin:5px;
- font-weight:900;font-size:14px;color:#355b45;
- background:#f7fff7;box-shadow:0 4px 0 #b8cdbb;cursor:pointer;
-}
-button:active{transform:translateY(3px);box-shadow:0 1px 0 #b8cdbb}
-.hint{font-size:12px;color:#65786a;margin:8px}
-.fruits{display:flex;justify-content:center;flex-wrap:wrap;gap:5px}
-.fruit-step{
- width:36px;height:43px;border-radius:10px;background:#e9eee6;
- display:flex;align-items:center;justify-content:center;
- flex-direction:column;font-size:23px;
-}
-.fruit-step small{font-size:9px}
-textarea{
- width:100%;height:90px;border:2px solid #c6d8c9;
- border-radius:12px;padding:10px;background:#fafffa;
- color:#344b40;font-size:12px;
-}
-.key{
- display:inline-block;background:#e7eee7;
- border:1px solid #b9cdbd;border-radius:7px;
- padding:4px 9px;margin:3px;font-weight:bold;
-}
-#status{font-size:13px;min-height:20px;font-weight:bold}
+#message button{font-size:17px}
+.controls{max-width:460px;margin:12px auto}
+.hint{font-size:13px;color:#718071;line-height:1.7}
+#saveInput{width:min(95%,400px);padding:10px;border:1px solid #ccd8c9;border-radius:10px}
 </style>
 </head>
 <body>
 
-<h1>🍉 Suika 🍉</h1>
+<h1>🍉 Suika</h1>
 
 <div class="panel">
- <div class="stats">
-  <div class="stat"><small>⭐ スコア</small><strong id="score">0</strong></div>
-  <div class="stat"><small>🏆 ベスト</small><strong id="best">0</strong></div>
-  <div class="stat"><small>🎮 プレイ回数</small><strong id="plays">0</strong></div>
- </div>
+  <div class="stats">
+    <div class="stat"><small>スコア</small><strong id="score">0</strong></div>
+    <div class="stat"><small>ベスト</small><strong id="best">0</strong></div>
+    <div class="stat"><small>プレイ回数</small><strong id="plays">0</strong></div>
+  </div>
+  <p>次のフルーツ：<span id="next">🍒</span></p>
+  <label for="mode">モード：</label>
+  <select id="mode">
+    <option value="normal">通常モード</option>
+    <option value="slippery">よく滑るモード 🧊</option>
+  </select>
+</div>
 
- <div class="stat" style="margin-top:9px">
-  <small>🍒 次のフルーツ</small>
-  <strong id="next">🍒</strong>
- </div>
-
- <div id="game">
+<div id="game">
   <canvas id="canvas" width="420" height="500"></canvas>
   <div id="message">
-   <h2>ゲームオーバー！</h2>
-   <p id="finalScore"></p>
-   <button onclick="restart()">もう一度遊ぶ 🔄</button>
+    <div>ゲームオーバー！</div>
+    <p id="finalScore"></p>
+    <button class="primary" onclick="restart()">もう一度遊ぶ</button>
   </div>
- </div>
-
- <div class="hint">← → / A・D で移動　↓ で落とす</div>
- <button onclick="restart()">🔄 リスタート</button>
 </div>
 
 <div class="controls">
- <h3>⌨️ キーボード操作</h3>
- <span class="key">←</span><span class="key">→</span>
- <span class="key">A</span><span class="key">D</span> 移動
- <br>
- <span class="key">↓</span> フルーツを落とす
- <div class="hint">スペース・Enterは使用しないよ。</div>
+  <button onclick="move(-1)">◀ 左</button>
+  <button class="primary" onclick="dropFruit()">⬇ 落とす</button>
+  <button onclick="move(1)">右 ▶</button>
+  <p class="hint">
+    ← →：移動　／　↓：落とす<br>
+    果物を合体させると、次のレベルに進化！<br>
+    レベルが上がるほど果物も大きくなるよ。
+  </p>
 </div>
 
-<div class="savebox">
- <h3>💾 セーブ・引き継ぎ</h3>
- <button onclick="createSave()">セーブコード発行</button>
- <button onclick="copySave()">📋 コピー</button>
- <textarea id="saveCode" placeholder="セーブコード"></textarea>
- <button onclick="loadSave()">📥 読み込む</button>
- <div id="status"></div>
-</div>
-
-<div class="evolution">
- <h3>🌈 フルーツ進化の輪</h3>
- <div class="fruits" id="evolution"></div>
+<div class="panel">
+  <h3>セーブ・引き継ぎ</h3>
+  <button class="primary" onclick="makeSave()">セーブコード発行</button>
+  <button onclick="copySave()">コピー</button>
+  <p><input id="saveInput" placeholder="セーブコードを入力"></p>
+  <button onclick="loadSave()">読み込む</button>
 </div>
 
 <script>
-"use strict";
+const {
+  Engine, Bodies, Body, Composite, Events
+}=Matter;
 
-const {Engine,Bodies,Body,Composite}=Matter;
 const W=420,H=500;
 const canvas=document.getElementById("canvas");
 const ctx=canvas.getContext("2d");
 
-const fruits=[
- {emoji:"🍒",name:"さくらんぼ",r:16,points:1},
- {emoji:"🍓",name:"いちご",r:23,points:3},
- {emoji:"🍇",name:"ぶどう",r:29,points:6},
- {emoji:"🍊",name:"みかん",r:35,points:10},
- {emoji:"🍋",name:"レモン",r:41,points:15},
- {emoji:"🍑",name:"もも",r:48,points:21},
- {emoji:"🍍",name:"パイン",r:55,points:28},
- {emoji:"🥥",name:"ココナッツ",r:63,points:36},
- {emoji:"🍈",name:"メロン",r:72,points:45},
- {emoji:"🍉",name:"スイカ",r:82,points:60}
+const engine=Engine.create();
+engine.gravity.y=1.05;
+
+const FRUITS=[
+  "🍒","🍓","🍇","🍊","🍋",
+  "🍑","🍍","🥥","🍈","🍉"
 ];
 
-const engine=Engine.create({
- enableSleeping:false,
- gravity:{x:0,y:1.15,scale:.001}
-});
+// レベルごとに大きくなるサイズ
+const RADII=[14,18,22,27,33,40,48,57,68,82];
 
+let fruits=[];
 let score=0;
 let best=Number(localStorage.getItem("suikaBest")||0);
 let plays=Number(localStorage.getItem("suikaPlays")||0);
 let nextLevel=0;
 let currentX=W/2;
-let canDrop=true;
+let currentLevel=0;
 let gameOver=false;
-let bodies=[];
-let effects=[];
-let overflowTimer=0;
-let lastTime=0;
+let dropping=false;
+let mergeLock=new Set();
+let saveCode="";
 let lastDrop=0;
-let keys={left:false,right:false};
-let downWasPressed=false;
 
-const dropCooldown=450;
+const wallOptions={
+  isStatic:true,
+  restitution:0.05
+};
 
-function stats(){
- document.getElementById("score").textContent=score;
- document.getElementById("best").textContent=best;
- document.getElementById("plays").textContent=plays;
+Composite.add(engine.world,[
+  Bodies.rectangle(W/2,H+15,W,30,wallOptions),
+  Bodies.rectangle(-15,H/2,30,H,wallOptions),
+  Bodies.rectangle(W+15,H/2,30,H,wallOptions)
+]);
+
+function radius(level){
+  return RADII[Math.min(level,RADII.length-1)];
 }
 
-function makeEvolution(){
- const el=document.getElementById("evolution");
- el.innerHTML="";
- fruits.forEach((f,i)=>{
-  const d=document.createElement("div");
-  d.className="fruit-step";
-  d.innerHTML=f.emoji+"<small>"+(i+1)+"</small>";
-  el.appendChild(d);
- });
+function updateStats(){
+  document.getElementById("score").textContent=score;
+  document.getElementById("best").textContent=best;
+  document.getElementById("plays").textContent=plays;
+  document.getElementById("next").textContent=FRUITS[nextLevel];
 }
 
-function addWalls(){
- Composite.add(engine.world,[
-  Bodies.rectangle(-12,H/2,24,H,{isStatic:true}),
-  Bodies.rectangle(W+12,H/2,24,H,{isStatic:true}),
-  Bodies.rectangle(W/2,H+12,W,24,{isStatic:true})
- ]);
+function applyMode(){
+  const slippery=document.getElementById("mode").value==="slippery";
+
+  for(const body of fruits){
+    body.friction=slippery?0.001:0.12;
+    body.frictionAir=slippery?0.0001:0.025;
+    body.restitution=slippery?0.12:0.02;
+  }
 }
 
-function createFruit(x,y,level){
- const f=fruits[level];
- const b=Bodies.circle(x,y,f.r,{
-  restitution:.12,friction:.15,density:.0015,
-  frictionAir:.002,label:"fruit"
- });
- b.level=level;
- b.merging=false;
- Composite.add(engine.world,b);
- bodies.push(b);
- return b;
+function createFruit(x,y,level,options={}){
+  const r=radius(level);
+  const slippery=document.getElementById("mode").value==="slippery";
+
+  const body=Bodies.circle(x,y,r,{
+    restitution:slippery?0.12:0.02,
+    friction:slippery?0.001:0.12,
+    frictionStatic:slippery?0.001:0.5,
+    frictionAir:slippery?0.0001:0.025,
+    density:0.0015,
+    ...options
+  });
+
+  body.level=level;
+  body.isFruit=true;
+  fruits.push(body);
+  Composite.add(engine.world,body);
+  return body;
 }
 
-function updateNext(){
- document.getElementById("next").textContent=fruits[nextLevel].emoji;
+function chooseNext(){
+  nextLevel=Math.floor(Math.random()*5);
+  updateStats();
 }
 
-function startGame(count=true){
- Composite.clear(engine.world,false);
- Engine.clear(engine);
- bodies=[];
- effects=[];
- score=0;
- overflowTimer=0;
- gameOver=false;
- canDrop=true;
- currentX=W/2;
- keys={left:false,right:false};
- downWasPressed=false;
+function startCurrent(){
+  if(gameOver)return;
+  currentLevel=nextLevel;
+  currentX=W/2;
+  chooseNext();
+}
 
- if(count){
+function move(direction){
+  if(gameOver||dropping)return;
+  currentX=Math.max(20,Math.min(W-20,currentX+direction*22));
+}
+
+function dropFruit(){
+  if(gameOver||dropping)return;
+
+  const now=Date.now();
+  if(now-lastDrop<180)return;
+  lastDrop=now;
+
+  dropping=true;
+  createFruit(currentX,45,currentLevel);
+
+  setTimeout(()=>{
+    dropping=false;
+    startCurrent();
+  },350);
+}
+
+Events.on(engine,"collisionStart",event=>{
+  for(const pair of event.pairs){
+    const a=pair.bodyA;
+    const b=pair.bodyB;
+
+    if(!a.isFruit||!b.isFruit)continue;
+    if(a.level!==b.level)continue;
+    if(mergeLock.has(a.id)||mergeLock.has(b.id))continue;
+
+    if(a.level>=FRUITS.length-1)continue;
+
+    mergeLock.add(a.id);
+    mergeLock.add(b.id);
+
+    const x=(a.position.x+b.position.x)/2;
+    const y=(a.position.y+b.position.y)/2;
+    const newLevel=a.level+1;
+
+    setTimeout(()=>{
+      if(!fruits.includes(a)||!fruits.includes(b))return;
+
+      Composite.remove(engine.world,a);
+      Composite.remove(engine.world,b);
+      fruits=fruits.filter(f=>f!==a&&f!==b);
+
+      mergeLock.delete(a.id);
+      mergeLock.delete(b.id);
+
+      createFruit(x,y,newLevel);
+
+      score+=Math.pow(newLevel+1,2)*10;
+      if(score>best){
+        best=score;
+        localStorage.setItem("suikaBest",best);
+      }
+      updateStats();
+    },80);
+  }
+});
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  // 背景
+  ctx.fillStyle="#f8f8ef";
+  ctx.fillRect(0,0,W,H);
+
+  // 落下ライン
+  ctx.setLineDash([6,6]);
+  ctx.strokeStyle="#c5d2bf";
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(0,105);
+  ctx.lineTo(W,105);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 操作中の果物
+  if(!gameOver&&!dropping){
+    ctx.globalAlpha=.65;
+    ctx.font=`${radius(currentLevel)*2}px serif`;
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText(FRUITS[currentLevel],currentX,45);
+    ctx.globalAlpha=1;
+  }
+
+  // 果物
+  for(const f of fruits){
+    const r=radius(f.level);
+    ctx.save();
+    ctx.translate(f.position.x,f.position.y);
+    ctx.rotate(f.angle);
+
+    ctx.font=`${r*2}px serif`;
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText(FRUITS[f.level],0,0);
+
+    ctx.restore();
+  }
+
+  // ゲームオーバー判定ライン
+  ctx.strokeStyle="#d5a5a5";
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(0,112);
+  ctx.lineTo(W,112);
+  ctx.stroke();
+
+  requestAnimationFrame(draw);
+}
+
+function checkGameOver(){
+  if(gameOver)return;
+
+  for(const f of fruits){
+    if(f.position.y<112&&Math.abs(f.velocity.y)<0.15&&f.position.y>30){
+      f.wait=(f.wait||0)+1;
+      if(f.wait>100){
+        endGame();
+        return;
+      }
+    }else{
+      f.wait=0;
+    }
+  }
+}
+
+function endGame(){
+  gameOver=true;
+  document.getElementById("finalScore").textContent="スコア："+score;
+  document.getElementById("message").style.display="flex";
+}
+
+function restart(){
+  for(const f of fruits)Composite.remove(engine.world,f);
+  fruits=[];
+  mergeLock.clear();
+
+  score=0;
+  gameOver=false;
+  dropping=false;
+  currentX=W/2;
+
+  document.getElementById("message").style.display="none";
+
   plays++;
   localStorage.setItem("suikaPlays",plays);
- }
+  updateStats();
 
- stats();
- document.getElementById("message").style.display="none";
- addWalls();
- nextLevel=Math.floor(Math.random()*5);
- updateNext();
+  chooseNext();
+  startCurrent();
 }
 
-function restart(){startGame(true)}
+function makeSave(){
+  const data={
+    score,best,plays,
+    mode:document.getElementById("mode").value,
+    currentLevel,nextLevel,currentX,
+    fruits:fruits.map(f=>({
+      x:f.position.x,
+      y:f.position.y,
+      vx:f.velocity.x,
+      vy:f.velocity.y,
+      angle:f.angle,
+      level:f.level
+    }))
+  };
 
-function updateScore(n){
- score+=n;
- if(score>best){
-  best=score;
-  localStorage.setItem("suikaBest",best);
- }
- stats();
+  saveCode="SUIKA2-"+btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  document.getElementById("saveInput").value=saveCode;
 }
 
-function drop(){
- if(!canDrop||gameOver)return;
- const r=fruits[nextLevel].r;
- const x=Math.max(r+5,Math.min(W-r-5,currentX));
- createFruit(x,65,nextLevel);
- nextLevel=Math.floor(Math.random()*5);
- updateNext();
- canDrop=false;
- lastDrop=performance.now();
-}
-
-function merge(a,b){
- if(gameOver||a.merging||b.merging||a.level!==b.level)return;
- if(a.level>=fruits.length-1)return;
-
- a.merging=true;
- b.merging=true;
-
- const x=(a.position.x+b.position.x)/2;
- const y=(a.position.y+b.position.y)/2;
- const level=a.level+1;
-
- Composite.remove(engine.world,a);
- Composite.remove(engine.world,b);
- bodies=bodies.filter(v=>v!==a&&v!==b);
-
- const n=createFruit(x,y,level);
- Body.setVelocity(n,{x:0,y:-2});
- updateScore(fruits[level].points);
- addEffect(x,y,fruits[level].emoji);
-}
-
-function collisionCheck(){
- for(const p of engine.pairs.list){
-  if(!p.isActive)continue;
-  const a=p.bodyA,b=p.bodyB;
-  if(a.label!=="fruit"||b.label!=="fruit")continue;
-  if(a.level===b.level&&a.level<fruits.length-1){
-   merge(a,b);
-  }
- }
-}
-
-function addEffect(x,y,emoji){
- effects.push({x,y,emoji,life:1,size:32,vy:-3});
- for(let i=0;i<10;i++){
-  effects.push({
-   x,y,emoji:"✨",life:1,size:12+Math.random()*12,
-   vx:(Math.random()-.5)*8,vy:-Math.random()*7
-  });
- }
-}
-
-/* 絵文字そのものを描画 */
-function drawFruit(b){
- const f=fruits[b.level];
- ctx.save();
- ctx.translate(b.position.x,b.position.y);
- ctx.rotate(b.angle);
- ctx.font=`${f.r*2.05}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
- ctx.textAlign="center";
- ctx.textBaseline="middle";
- ctx.shadowColor="#415b4655";
- ctx.shadowBlur=5;
- ctx.fillText(f.emoji,0,2);
- ctx.restore();
-}
-
-function drawBackground(){
- const g=ctx.createLinearGradient(0,0,0,H);
- g.addColorStop(0,"#e5eee4");
- g.addColorStop(1,"#f1eee1");
- ctx.fillStyle=g;
- ctx.fillRect(0,0,W,H);
-
- ctx.save();
- ctx.setLineDash([7,7]);
- ctx.strokeStyle="#9caf9d";
- ctx.lineWidth=2;
- ctx.beginPath();
- ctx.moveTo(0,90);
- ctx.lineTo(W,90);
- ctx.stroke();
- ctx.restore();
-
- ctx.fillStyle="#87998b";
- ctx.font="12px sans-serif";
- ctx.fillText("GAME OVER LINE",8,82);
-}
-
-function drawPreview(){
- if(gameOver||!canDrop)return;
- const f=fruits[nextLevel];
- ctx.save();
- ctx.globalAlpha=.65;
- ctx.font=`${f.r*2.05}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
- ctx.textAlign="center";
- ctx.textBaseline="middle";
- ctx.fillText(f.emoji,currentX,65);
- ctx.restore();
-}
-
-function drawEffects(dt){
- effects=effects.filter(e=>e.life>0);
- for(const e of effects){
-  e.x+=(e.vx||0);
-  e.y+=e.vy;
-  e.life-=dt/650;
-  ctx.save();
-  ctx.globalAlpha=Math.max(0,e.life);
-  ctx.font=e.size+"px serif";
-  ctx.textAlign="center";
-  ctx.fillText(e.emoji,e.x,e.y);
-  ctx.restore();
- }
-}
-
-function checkGameOver(dt){
- if(gameOver)return;
- let danger=false;
- for(const b of bodies){
-  if(b.position.y-fruits[b.level].r<95&&
-     b.position.y>80&&Math.abs(b.velocity.y)<.5){
-   danger=true;
-   break;
-  }
- }
- if(danger)overflowTimer+=dt;
- else overflowTimer=0;
-
- if(overflowTimer>1800){
-  gameOver=true;
-  document.getElementById("finalScore").textContent="スコア："+score+" 点";
-  document.getElementById("message").style.display="flex";
- }
-}
-
-function typing(){
- const el=document.activeElement;
- return el&&(
-  el.tagName==="TEXTAREA"||
-  el.tagName==="INPUT"||
-  el.tagName==="SELECT"||
-  el.isContentEditable
- );
-}
-
-/* キー操作：↓だけで落とす */
-window.addEventListener("keydown",function(e){
- if(typing())return;
-
- const k=e.key.toLowerCase();
-
- if(["arrowleft","arrowright","arrowup","arrowdown"].includes(k)){
-  e.preventDefault();
-  e.stopImmediatePropagation();
- }
-
- if(k==="arrowleft"||k==="a")keys.left=true;
- if(k==="arrowright"||k==="d")keys.right=true;
-
- if(k==="arrowdown"){
-  if(!downWasPressed&&!e.repeat){
-   downWasPressed=true;
-   drop();
-  }
- }
-},{capture:true,passive:false});
-
-window.addEventListener("keyup",function(e){
- if(typing())return;
-
- const k=e.key.toLowerCase();
-
- if(["arrowleft","arrowright","arrowup","arrowdown"].includes(k)){
-  e.preventDefault();
-  e.stopImmediatePropagation();
- }
-
- if(k==="arrowleft"||k==="a")keys.left=false;
- if(k==="arrowright"||k==="d")keys.right=false;
- if(k==="arrowdown")downWasPressed=false;
-},{capture:true,passive:false});
-
-window.addEventListener("blur",function(){
- keys.left=false;
- keys.right=false;
- downWasPressed=false;
-});
-
-function updateKeyboard(dt){
- if(gameOver)return;
- const speed=.38*dt;
- if(keys.left)currentX-=speed;
- if(keys.right)currentX+=speed;
- const r=fruits[nextLevel].r;
- currentX=Math.max(r+5,Math.min(W-r-5,currentX));
-}
-
-canvas.addEventListener("pointermove",e=>{
- const rect=canvas.getBoundingClientRect();
- currentX=(e.clientX-rect.left)*W/rect.width;
- currentX=Math.max(20,Math.min(W-20,currentX));
-});
-
-canvas.addEventListener("pointerdown",e=>{
- e.preventDefault();
- const rect=canvas.getBoundingClientRect();
- currentX=(e.clientX-rect.left)*W/rect.width;
- drop();
-});
-
-function loop(time){
- const dt=Math.min(time-lastTime||16,32);
- lastTime=time;
-
- updateKeyboard(dt);
-
- if(!canDrop&&performance.now()-lastDrop>=dropCooldown){
-  canDrop=true;
- }
-
- if(!gameOver){
-  Engine.update(engine,dt);
-  collisionCheck();
-  checkGameOver(dt);
- }
-
- drawBackground();
- drawPreview();
- bodies.forEach(drawFruit);
- drawEffects(dt);
-
- requestAnimationFrame(loop);
-}
-
-/* セーブコード */
-function createSave(){
- const data={
-  version:1,score,best,plays,nextLevel,currentX,
-  gameOver,overflowTimer,
-  fruits:bodies.map(b=>({
-   level:b.level,x:b.position.x,y:b.position.y,
-   vx:b.velocity.x,vy:b.velocity.y,
-   angle:b.angle,av:b.angularVelocity
-  }))
- };
-
- const code="SUIKA1-"+btoa(
-  unescape(encodeURIComponent(JSON.stringify(data)))
- );
-
- document.getElementById("saveCode").value=code;
- document.getElementById("status").textContent="✅ セーブコード発行完了！";
-}
-
-async function copySave(){
- if(!document.getElementById("saveCode").value.trim())createSave();
- const box=document.getElementById("saveCode");
- try{
-  await navigator.clipboard.writeText(box.value);
-  document.getElementById("status").textContent="📋 コピー完了！";
- }catch(e){
-  box.select();
+function copySave(){
+  if(!saveCode)makeSave();
+  const input=document.getElementById("saveInput");
+  input.value=saveCode;
+  input.select();
   document.execCommand("copy");
-  document.getElementById("status").textContent="📋 コピーしました！";
- }
+  alert("セーブコードをコピーしました！");
 }
 
 function loadSave(){
- try{
-  const code=document.getElementById("saveCode").value.trim();
-  if(!code.startsWith("SUIKA1-"))throw Error("コード形式が違います");
+  try{
+    const code=document.getElementById("saveInput").value.trim();
+    if(!code.startsWith("SUIKA2-"))throw new Error();
 
-  const data=JSON.parse(decodeURIComponent(escape(atob(code.slice(7)))));
-  if(data.version!==1||!Array.isArray(data.fruits))throw Error("データが不正です");
-  if(data.fruits.length>500)throw Error("フルーツ数が多すぎます");
-  if(!Number.isInteger(data.nextLevel)||data.nextLevel<0||data.nextLevel>=fruits.length)throw Error("次のフルーツが不正です");
+    const data=JSON.parse(
+      decodeURIComponent(escape(atob(code.slice(7))))
+    );
 
-  for(const f of data.fruits){
-   if(!Number.isInteger(f.level)||f.level<0||f.level>=fruits.length||
-    ![f.x,f.y,f.vx,f.vy,f.angle,f.av].every(Number.isFinite)){
-    throw Error("盤面データが不正です");
-   }
+    if(!Array.isArray(data.fruits))throw new Error();
+
+    for(const f of fruits)Composite.remove(engine.world,f);
+    fruits=[];
+    mergeLock.clear();
+
+    score=Number(data.score)||0;
+    best=Math.max(Number(data.best)||0,best);
+    plays=Number(data.plays)||plays;
+    currentLevel=Math.max(0,Math.min(FRUITS.length-1,Number(data.currentLevel)||0));
+    nextLevel=Math.max(0,Math.min(FRUITS.length-1,Number(data.nextLevel)||0));
+    currentX=Math.max(20,Math.min(W-20,Number(data.currentX)||W/2));
+
+    document.getElementById("mode").value=
+      data.mode==="slippery"?"slippery":"normal";
+
+    for(const f of data.fruits){
+      const body=createFruit(
+        Math.max(15,Math.min(W-15,Number(f.x)||W/2)),
+        Math.max(15,Math.min(H-15,Number(f.y)||H/2)),
+        Math.max(0,Math.min(FRUITS.length-1,Number(f.level)||0))
+      );
+      Body.setVelocity(body,{
+        x:Number(f.vx)||0,
+        y:Number(f.vy)||0
+      });
+      Body.setAngle(body,Number(f.angle)||0);
+    }
+
+    gameOver=false;
+    dropping=false;
+    document.getElementById("message").style.display="none";
+    updateStats();
+    applyMode();
+    alert("セーブデータを読み込みました！");
+  }catch(e){
+    alert("セーブコードが正しくありません。");
   }
-
-  startGame(false);
-  score=data.score;
-  best=Math.max(data.best,best);
-  plays=data.plays;
-  nextLevel=data.nextLevel;
-  currentX=Math.max(10,Math.min(W-10,Number(data.currentX)||W/2));
-  gameOver=!!data.gameOver;
-  overflowTimer=Number(data.overflowTimer)||0;
-
-  for(const f of data.fruits){
-   const b=createFruit(f.x,f.y,f.level);
-   Body.setVelocity(b,{x:f.vx,y:f.vy});
-   Body.setAngle(b,f.angle);
-   Body.setAngularVelocity(b,f.av);
-  }
-
-  localStorage.setItem("suikaBest",best);
-  localStorage.setItem("suikaPlays",plays);
-  stats();
-  updateNext();
-
-  if(gameOver){
-   document.getElementById("finalScore").textContent="スコア："+score+" 点";
-   document.getElementById("message").style.display="flex";
-  }
-
-  document.getElementById("status").textContent="✅ 読み込み成功！";
- }catch(e){
-  document.getElementById("status").textContent="❌ "+e.message;
- }
 }
 
-makeEvolution();
-stats();
-startGame(true);
-requestAnimationFrame(loop);
+document.getElementById("mode").addEventListener("change",applyMode);
+
+window.addEventListener("keydown",e=>{
+  if(["ArrowLeft","ArrowRight","ArrowDown"].includes(e.key)){
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  if(e.repeat)return;
+
+  if(e.key==="ArrowLeft")move(-1);
+  if(e.key==="ArrowRight")move(1);
+  if(e.key==="ArrowDown")dropFruit();
+},true);
+
+canvas.addEventListener("pointermove",e=>{
+  if(gameOver||dropping)return;
+  const rect=canvas.getBoundingClientRect();
+  currentX=Math.max(20,Math.min(W-20,
+    (e.clientX-rect.left)*W/rect.width
+  ));
+});
+
+canvas.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  dropFruit();
+});
+
+function loop(){
+  Engine.update(engine,1000/60);
+  checkGameOver();
+  requestAnimationFrame(loop);
+}
+
+updateStats();
+chooseNext();
+startCurrent();
+draw();
+loop();
 </script>
 </body>
 </html>
