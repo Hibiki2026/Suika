@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -8,17 +9,17 @@
 <style>
 *{box-sizing:border-box}
 body{
-  margin:0;padding:20px 12px 35px;
+  margin:0;padding:18px 10px 30px;
   background:#e9eee7;color:#34443a;
   font-family:system-ui,sans-serif;text-align:center
 }
-h1{margin:4px 0 12px;font-size:32px}
+h1{margin:5px 0 12px;font-size:32px}
 .panel{
   max-width:460px;margin:0 auto 12px;padding:12px;
   background:#fff;border-radius:18px;
   box-shadow:0 4px 15px #52634b18
 }
-.stats{display:flex;justify-content:space-around;gap:8px}
+.stats{display:flex;justify-content:space-around;gap:7px}
 .stat{flex:1;background:#f1f5ee;border-radius:12px;padding:8px}
 .stat strong{display:block;font-size:22px}
 .stat small{color:#718071}
@@ -27,7 +28,6 @@ button,select{
   font-size:15px;background:#dce9d8;color:#34443a;
   cursor:pointer;margin:3px
 }
-button:active{transform:scale(.97)}
 .primary{background:#83ad83;color:white}
 #game{
   position:relative;width:min(420px,96vw);
@@ -39,13 +39,15 @@ canvas{display:block;width:100%;height:100%}
 #message{
   position:absolute;inset:0;display:none;
   align-items:center;justify-content:center;
-  flex-direction:column;background:#ffffffd9;
+  flex-direction:column;background:#ffffffdf;
   font-size:25px;font-weight:bold
 }
-#message button{font-size:17px}
 .controls{max-width:460px;margin:12px auto}
 .hint{font-size:13px;color:#718071;line-height:1.7}
-#saveInput{width:min(95%,400px);padding:10px;border:1px solid #ccd8c9;border-radius:10px}
+#saveInput{
+  width:min(95%,400px);padding:10px;
+  border:1px solid #ccd8c9;border-radius:10px
+}
 </style>
 </head>
 <body>
@@ -80,9 +82,9 @@ canvas{display:block;width:100%;height:100%}
   <button class="primary" onclick="dropFruit()">⬇ 落とす</button>
   <button onclick="move(1)">右 ▶</button>
   <p class="hint">
-    ← →：移動　／　↓：落とす<br>
-    果物を合体させると、次のレベルに進化！<br>
-    レベルが上がるほど果物も大きくなるよ。
+    ← →：移動 ／ ↓：落とす<br>
+    同じ果物を合体させて進化！<br>
+    器から果物があふれるとゲームオーバー
   </p>
 </div>
 
@@ -96,10 +98,11 @@ canvas{display:block;width:100%;height:100%}
 
 <script>
 const {
-  Engine, Bodies, Body, Composite, Events
+  Engine,Bodies,Body,Composite,Events
 }=Matter;
 
 const W=420,H=500;
+const RIM=100;
 const canvas=document.getElementById("canvas");
 const ctx=canvas.getContext("2d");
 
@@ -111,36 +114,41 @@ const FRUITS=[
   "🍑","🍍","🥥","🍈","🍉"
 ];
 
-// レベルごとに大きくなるサイズ
-const RADII=[14,18,22,27,33,40,48,57,68,82];
+// 基本サイズ
+const BASE_RADII=[
+  14,18,22,27,33,40,48,57,68,82
+];
+
+// 果物ごとの大きさ補正
+const SIZE_SCALE=[
+  1,1,1.5,1,1,1,1.3,1,1,2
+];
+
+function radius(level){
+  return BASE_RADII[level]*SIZE_SCALE[level];
+}
 
 let fruits=[];
 let score=0;
 let best=Number(localStorage.getItem("suikaBest")||0);
 let plays=Number(localStorage.getItem("suikaPlays")||0);
 let nextLevel=0;
-let currentX=W/2;
 let currentLevel=0;
+let currentX=W/2;
 let gameOver=false;
 let dropping=false;
+let lastDrop=0;
 let mergeLock=new Set();
 let saveCode="";
-let lastDrop=0;
 
-const wallOptions={
-  isStatic:true,
-  restitution:0.05
-};
-
-Composite.add(engine.world,[
-  Bodies.rectangle(W/2,H+15,W,30,wallOptions),
-  Bodies.rectangle(-15,H/2,30,H,wallOptions),
-  Bodies.rectangle(W+15,H/2,30,H,wallOptions)
-]);
-
-function radius(level){
-  return RADII[Math.min(level,RADII.length-1)];
-}
+const walls=[
+  // 左右の壁。上部は開けておく
+  Bodies.rectangle(0,(RIM+H)/2,30,H-RIM+40,{isStatic:true}),
+  Bodies.rectangle(W,(RIM+H)/2,30,H-RIM+40,{isStatic:true}),
+  // 底
+  Bodies.rectangle(W/2,H+10,W,30,{isStatic:true})
+];
+Composite.add(engine.world,walls);
 
 function updateStats(){
   document.getElementById("score").textContent=score;
@@ -149,34 +157,36 @@ function updateStats(){
   document.getElementById("next").textContent=FRUITS[nextLevel];
 }
 
-function applyMode(){
+function createFruit(x,y,level){
   const slippery=document.getElementById("mode").value==="slippery";
-
-  for(const body of fruits){
-    body.friction=slippery?0.001:0.12;
-    body.frictionAir=slippery?0.0001:0.025;
-    body.restitution=slippery?0.12:0.02;
-  }
-}
-
-function createFruit(x,y,level,options={}){
   const r=radius(level);
-  const slippery=document.getElementById("mode").value==="slippery";
 
   const body=Bodies.circle(x,y,r,{
     restitution:slippery?0.12:0.02,
     friction:slippery?0.001:0.12,
     frictionStatic:slippery?0.001:0.5,
     frictionAir:slippery?0.0001:0.025,
-    density:0.0015,
-    ...options
+    density:0.0015
   });
 
   body.level=level;
   body.isFruit=true;
+  body.overflowTicks=0;
+
   fruits.push(body);
   Composite.add(engine.world,body);
   return body;
+}
+
+function applyMode(){
+  const slippery=document.getElementById("mode").value==="slippery";
+
+  for(const f of fruits){
+    f.friction=slippery?0.001:0.12;
+    f.frictionStatic=slippery?0.001:0.5;
+    f.frictionAir=slippery?0.0001:0.025;
+    f.restitution=slippery?0.12:0.02;
+  }
 }
 
 function chooseNext(){
@@ -191,9 +201,9 @@ function startCurrent(){
   chooseNext();
 }
 
-function move(direction){
+function move(dir){
   if(gameOver||dropping)return;
-  currentX=Math.max(20,Math.min(W-20,currentX+direction*22));
+  currentX=Math.max(25,Math.min(W-25,currentX+dir*22));
 }
 
 function dropFruit(){
@@ -212,6 +222,7 @@ function dropFruit(){
   },350);
 }
 
+// 合体処理
 Events.on(engine,"collisionStart",event=>{
   for(const pair of event.pairs){
     const a=pair.bodyA;
@@ -219,9 +230,8 @@ Events.on(engine,"collisionStart",event=>{
 
     if(!a.isFruit||!b.isFruit)continue;
     if(a.level!==b.level)continue;
-    if(mergeLock.has(a.id)||mergeLock.has(b.id))continue;
-
     if(a.level>=FRUITS.length-1)continue;
+    if(mergeLock.has(a.id)||mergeLock.has(b.id))continue;
 
     mergeLock.add(a.id);
     mergeLock.add(b.id);
@@ -242,7 +252,7 @@ Events.on(engine,"collisionStart",event=>{
 
       createFruit(x,y,newLevel);
 
-      score+=Math.pow(newLevel+1,2)*10;
+      score+=(newLevel+1)*10;
       if(score>best){
         best=score;
         localStorage.setItem("suikaBest",best);
@@ -252,27 +262,131 @@ Events.on(engine,"collisionStart",event=>{
   }
 });
 
+// 果物の描画
+function drawFruit(f){
+  const r=radius(f.level);
+  const x=f.position.x;
+  const y=f.position.y;
+
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(f.angle);
+
+  if(f.level===9){
+    // スイカは大きな丸い球体
+    const grad=ctx.createRadialGradient(
+      -r*.35,-r*.4,r*.08,0,0,r
+    );
+    grad.addColorStop(0,"#b9ed88");
+    grad.addColorStop(.55,"#54a94e");
+    grad.addColorStop(1,"#23713e");
+
+    ctx.fillStyle=grad;
+    ctx.beginPath();
+    ctx.arc(0,0,r,0,Math.PI*2);
+    ctx.fill();
+
+    // スイカの縞
+    ctx.strokeStyle="#23683c";
+    ctx.lineWidth=Math.max(2,r*.09);
+    for(let i=-2;i<=2;i++){
+      ctx.beginPath();
+      ctx.ellipse(i*r*.35,0,r*.2,r*.9,0,0,Math.PI*2);
+      ctx.stroke();
+    }
+
+    // 種
+    ctx.fillStyle="#263b2b";
+    for(let i=0;i<7;i++){
+      const a=i*Math.PI*2/7;
+      ctx.beginPath();
+      ctx.ellipse(
+        Math.cos(a)*r*.4,
+        Math.sin(a)*r*.4,
+        r*.045,r*.09,a,0,Math.PI*2
+      );
+      ctx.fill();
+    }
+  }else if(f.level===2){
+    // ぶどう：丸い粒を集めた形
+    const points=[
+      [-.25,-.48],[.25,-.48],[-.5,-.08],
+      [0,-.08],[.5,-.08],[-.25,.34],[.25,.34],[0,.65]
+    ];
+    const pr=r*.34;
+    const grad=ctx.createRadialGradient(-pr*.3,-pr*.4,1,0,0,pr*1.4);
+    grad.addColorStop(0,"#d5a1fa");
+    grad.addColorStop(1,"#7136a5");
+
+    for(const p of points){
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      ctx.arc(p[0]*r,p[1]*r,pr,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.strokeStyle="#4b813d";
+    ctx.lineWidth=r*.07;
+    ctx.beginPath();
+    ctx.moveTo(0,-r*.8);
+    ctx.lineTo(0,-r*.58);
+    ctx.stroke();
+  }else{
+    // その他の果物：物理円に合わせて描画
+    const emoji=FRUITS[f.level];
+    const fontSize=r*1.55;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0,0,r*.94,0,Math.PI*2);
+    ctx.clip();
+
+    ctx.font=`${fontSize}px serif`;
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText(emoji,0,r*.04);
+
+    ctx.restore();
+
+    // パインは小さく見えないように補助表示
+    if(f.level===6){
+      ctx.strokeStyle="#558b3e";
+      ctx.lineWidth=r*.07;
+      ctx.beginPath();
+      ctx.moveTo(0,-r*.85);
+      ctx.lineTo(-r*.22,-r*1.05);
+      ctx.moveTo(0,-r*.85);
+      ctx.lineTo(r*.22,-r*1.05);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
 function draw(){
   ctx.clearRect(0,0,W,H);
-
-  // 背景
   ctx.fillStyle="#f8f8ef";
   ctx.fillRect(0,0,W,H);
 
-  // 落下ライン
-  ctx.setLineDash([6,6]);
-  ctx.strokeStyle="#c5d2bf";
-  ctx.lineWidth=2;
+  // 器のふち
+  ctx.strokeStyle="#9db49a";
+  ctx.lineWidth=5;
   ctx.beginPath();
-  ctx.moveTo(0,105);
-  ctx.lineTo(W,105);
+  ctx.moveTo(0,RIM);
+  ctx.lineTo(0,H);
+  ctx.lineTo(W,H);
+  ctx.lineTo(W,RIM);
   ctx.stroke();
-  ctx.setLineDash([]);
+
+  // 器の内側の薄い色
+  ctx.fillStyle="#edf2e8";
+  ctx.fillRect(5,RIM+2,W-10,H-RIM-7);
 
   // 操作中の果物
   if(!gameOver&&!dropping){
+    const r=radius(currentLevel);
     ctx.globalAlpha=.65;
-    ctx.font=`${radius(currentLevel)*2}px serif`;
+    ctx.font=`${r*1.55}px serif`;
     ctx.textAlign="center";
     ctx.textBaseline="middle";
     ctx.fillText(FRUITS[currentLevel],currentX,45);
@@ -281,42 +395,32 @@ function draw(){
 
   // 果物
   for(const f of fruits){
-    const r=radius(f.level);
-    ctx.save();
-    ctx.translate(f.position.x,f.position.y);
-    ctx.rotate(f.angle);
-
-    ctx.font=`${r*2}px serif`;
-    ctx.textAlign="center";
-    ctx.textBaseline="middle";
-    ctx.fillText(FRUITS[f.level],0,0);
-
-    ctx.restore();
+    drawFruit(f);
   }
-
-  // ゲームオーバー判定ライン
-  ctx.strokeStyle="#d5a5a5";
-  ctx.lineWidth=2;
-  ctx.beginPath();
-  ctx.moveTo(0,112);
-  ctx.lineTo(W,112);
-  ctx.stroke();
 
   requestAnimationFrame(draw);
 }
 
-function checkGameOver(){
+// 器からあふれたか確認
+function checkOverflow(){
   if(gameOver)return;
 
   for(const f of fruits){
-    if(f.position.y<112&&Math.abs(f.velocity.y)<0.15&&f.position.y>30){
-      f.wait=(f.wait||0)+1;
-      if(f.wait>100){
+    const r=radius(f.level);
+
+    // 落下中や合体直後は判定しない
+    const aboveRim=f.position.y < RIM-r*.35;
+    const slow=Math.abs(f.velocity.x)<0.35 &&
+               Math.abs(f.velocity.y)<0.35;
+
+    if(aboveRim&&slow){
+      f.overflowTicks=(f.overflowTicks||0)+1;
+      if(f.overflowTicks>100){
         endGame();
         return;
       }
     }else{
-      f.wait=0;
+      f.overflowTicks=0;
     }
   }
 }
@@ -328,10 +432,12 @@ function endGame(){
 }
 
 function restart(){
-  for(const f of fruits)Composite.remove(engine.world,f);
+  for(const f of fruits){
+    Composite.remove(engine.world,f);
+  }
+
   fruits=[];
   mergeLock.clear();
-
   score=0;
   gameOver=false;
   dropping=false;
@@ -341,8 +447,8 @@ function restart(){
 
   plays++;
   localStorage.setItem("suikaPlays",plays);
-  updateStats();
 
+  updateStats();
   chooseNext();
   startCurrent();
 }
@@ -362,7 +468,9 @@ function makeSave(){
     }))
   };
 
-  saveCode="SUIKA2-"+btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  saveCode="SUIKA3-"+btoa(
+    unescape(encodeURIComponent(JSON.stringify(data)))
+  );
   document.getElementById("saveInput").value=saveCode;
 }
 
@@ -378,7 +486,7 @@ function copySave(){
 function loadSave(){
   try{
     const code=document.getElementById("saveInput").value.trim();
-    if(!code.startsWith("SUIKA2-"))throw new Error();
+    if(!code.startsWith("SUIKA3-"))throw new Error();
 
     const data=JSON.parse(
       decodeURIComponent(escape(atob(code.slice(7))))
@@ -393,19 +501,22 @@ function loadSave(){
     score=Number(data.score)||0;
     best=Math.max(Number(data.best)||0,best);
     plays=Number(data.plays)||plays;
-    currentLevel=Math.max(0,Math.min(FRUITS.length-1,Number(data.currentLevel)||0));
-    nextLevel=Math.max(0,Math.min(FRUITS.length-1,Number(data.nextLevel)||0));
-    currentX=Math.max(20,Math.min(W-20,Number(data.currentX)||W/2));
+
+    currentLevel=Math.max(0,Math.min(9,Number(data.currentLevel)||0));
+    nextLevel=Math.max(0,Math.min(9,Number(data.nextLevel)||0));
+    currentX=Math.max(25,Math.min(W-25,Number(data.currentX)||W/2));
 
     document.getElementById("mode").value=
       data.mode==="slippery"?"slippery":"normal";
 
     for(const f of data.fruits){
+      const level=Math.max(0,Math.min(9,Number(f.level)||0));
       const body=createFruit(
-        Math.max(15,Math.min(W-15,Number(f.x)||W/2)),
+        Math.max(20,Math.min(W-20,Number(f.x)||W/2)),
         Math.max(15,Math.min(H-15,Number(f.y)||H/2)),
-        Math.max(0,Math.min(FRUITS.length-1,Number(f.level)||0))
+        level
       );
+
       Body.setVelocity(body,{
         x:Number(f.vx)||0,
         y:Number(f.vy)||0
@@ -416,9 +527,10 @@ function loadSave(){
     gameOver=false;
     dropping=false;
     document.getElementById("message").style.display="none";
-    updateStats();
+
     applyMode();
-    alert("セーブデータを読み込みました！");
+    updateStats();
+    alert("読み込みました！");
   }catch(e){
     alert("セーブコードが正しくありません。");
   }
@@ -426,6 +538,7 @@ function loadSave(){
 
 document.getElementById("mode").addEventListener("change",applyMode);
 
+// キーボード操作
 window.addEventListener("keydown",e=>{
   if(["ArrowLeft","ArrowRight","ArrowDown"].includes(e.key)){
     e.preventDefault();
@@ -439,10 +552,12 @@ window.addEventListener("keydown",e=>{
   if(e.key==="ArrowDown")dropFruit();
 },true);
 
+// マウス・タッチ操作
 canvas.addEventListener("pointermove",e=>{
   if(gameOver||dropping)return;
+
   const rect=canvas.getBoundingClientRect();
-  currentX=Math.max(20,Math.min(W-20,
+  currentX=Math.max(25,Math.min(W-25,
     (e.clientX-rect.left)*W/rect.width
   ));
 });
@@ -454,7 +569,7 @@ canvas.addEventListener("pointerdown",e=>{
 
 function loop(){
   Engine.update(engine,1000/60);
-  checkGameOver();
+  checkOverflow();
   requestAnimationFrame(loop);
 }
 
