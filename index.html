@@ -9,68 +9,65 @@
 <style>
 *{box-sizing:border-box}
 body{
-  margin:0;
-  min-height:100vh;
-  padding:12px 10px 110px;
-  background:#e9eee7;
-  color:#34443a;
-  font-family:system-ui,sans-serif;
-  text-align:center;
-  overflow-x:hidden;
+  margin:0;padding:12px 10px 30px;
+  background:#e9eee7;color:#34443a;
+  font-family:system-ui,sans-serif;text-align:center;
 }
-h1{margin:4px 0 10px;font-size:30px}
+h1{margin:4px 0 12px;font-size:30px}
 .panel{
   position:relative;
-  z-index:7;
+  z-index:10;
   max-width:460px;
-  margin:0 auto 10px;
-  padding:11px;
+  margin:0 auto 12px;
+  padding:12px;
   background:#fff;
   border-radius:17px;
   box-shadow:0 4px 15px #52634b18;
 }
 .stats{display:flex;justify-content:space-around;gap:7px}
-.stat{flex:1;background:#f1f5ee;border-radius:12px;padding:7px}
-.stat strong{display:block;font-size:21px}
+.stat{flex:1;background:#f1f5ee;border-radius:12px;padding:8px}
+.stat strong{display:block;font-size:22px}
 .stat small{color:#718071}
 button,select,input{
-  position:relative;
-  z-index:8;
-  border:0;
-  border-radius:12px;
-  padding:10px 13px;
-  font-size:15px;
-  background:#dce9d8;
-  color:#34443a;
-  cursor:pointer;
-  margin:3px;
+  border:0;border-radius:12px;padding:10px 13px;
+  font-size:15px;background:#dce9d8;color:#34443a;
+  cursor:pointer;margin:3px;
 }
 button:active{transform:scale(.96)}
 .primary{background:#83ad83;color:white}
-#controls{
-  position:fixed;
-  z-index:8;
-  bottom:10px;
-  left:0;
-  right:0;
-  display:flex;
-  justify-content:center;
-  gap:5px;
-  pointer-events:none;
+#game{
+  position:relative;
+  width:min(420px,96vw);
+  height:500px;
+  margin:0 auto 12px;
+  z-index:1;
 }
-#controls button{pointer-events:auto;box-shadow:0 3px 12px #0002}
 #physicsCanvas{
   position:fixed;
   inset:0;
   width:100%;
   height:100%;
-  z-index:5;
+  z-index:20;
   pointer-events:none;
+}
+#controls{
+  position:relative;
+  z-index:10;
+  display:flex;
+  justify-content:center;
+  gap:6px;
+  margin:12px auto;
+}
+.hint{font-size:12px;color:#718071;line-height:1.7}
+#saveInput{
+  width:min(95%,400px);
+  background:#f5f7f2;
+  border:1px solid #ccd8c9;
 }
 #message{
   display:none;
   position:fixed;
-  z-index:20;
+  z-index:30;
   inset:0;
   background:#ffffffdf;
   align-items:center;
@@ -79,8 +76,6 @@ button:active{transform:scale(.96)}
   font-size:25px;
   font-weight:bold;
 }
-.hint{font-size:12px;color:#718071;line-height:1.6}
-#saveInput{width:min(90%,380px);background:#f5f7f2}
 </style>
 </head>
 <body>
@@ -101,6 +96,7 @@ button:active{transform:scale(.96)}
   </select>
 </div>
 
+<div id="game"></div>
 <canvas id="physicsCanvas"></canvas>
 
 <div id="controls">
@@ -110,11 +106,7 @@ button:active{transform:scale(.96)}
 </div>
 
 <div class="panel">
-  <p class="hint">
-    ← →：移動　↓：落とす<br>
-    同じ果物を合体させよう！<br>
-    器からあふれた果物は画面に飛び出すよ！
-  </p>
+  <p class="hint">← →：移動　／　↓：落とす</p>
 </div>
 
 <div class="panel">
@@ -137,42 +129,40 @@ const {
 }=Matter;
 
 const engine=Engine.create();
-engine.gravity.y=1.0;
+engine.gravity.y=1;
 engine.positionIterations=8;
 engine.velocityIterations=6;
 
 const canvas=document.getElementById("physicsCanvas");
 const ctx=canvas.getContext("2d");
+const game=document.getElementById("game");
 
 const FRUITS=["🍒","🍓","🍇","🍊","🍋","🍑","🍍","🥥","🍈","🍉"];
-
-// レベルごとの基本サイズ
-const RADII=[14,18,22,28,34,41,49,59,70,82];
-
-// ぶどう・パイン・スイカのサイズ調整
+const BASE=[14,18,22,28,34,41,49,59,70,82];
 const SCALE=[1,1,1.5,1,1,1,1.3,1,1,2];
 
 function radius(level){
-  return RADII[level]*SCALE[level];
+  return BASE[level]*SCALE[level];
 }
 
 let fruits=[];
-let obstacles=[];
+let bowlBodies=[];
+let uiBodies=[];
 let score=0;
 let best=Number(localStorage.getItem("suikaBest")||0);
 let plays=Number(localStorage.getItem("suikaPlays")||0);
-let nextLevel=0;
 let currentLevel=0;
-let currentX=window.innerWidth/2;
+let nextLevel=0;
+let currentX=innerWidth/2;
 let gameOver=false;
 let dropping=false;
 let lastDrop=0;
-let saveCode="";
 let mergeLock=new Set();
-let bowlBodies=[];
+let saveCode="";
+let bowl={};
 
 function resizeCanvas(){
-  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const dpr=Math.min(devicePixelRatio||1,2);
   canvas.width=Math.floor(innerWidth*dpr);
   canvas.height=Math.floor(innerHeight*dpr);
   canvas.style.width=innerWidth+"px";
@@ -181,63 +171,64 @@ function resizeCanvas(){
   rebuildBowl();
 }
 
-function bowlGeometry(){
-  const cx=innerWidth/2;
-  const bottom=innerHeight*.69;
-  const top=innerHeight*.45;
-  const bottomHalf=Math.min(125,innerWidth*.30);
-  const topHalf=Math.min(175,innerWidth*.43);
-  return {cx,bottom,top,bottomHalf,topHalf};
+function getBowl(){
+  const rect=game.getBoundingClientRect();
+  const cx=rect.left+rect.width/2;
+  const top=rect.top+35;
+  const bottom=rect.top+rect.height-25;
+  const topHalf=Math.min(175,rect.width*.43);
+  const bottomHalf=Math.min(125,rect.width*.30);
+  return {cx,top,bottom,topHalf,bottomHalf};
 }
 
-// 器は底と左右の短いカーブだけ
+function wallSegment(x1,y1,x2,y2){
+  const dx=x2-x1;
+  const dy=y2-y1;
+  const len=Math.hypot(dx,dy);
+  return Bodies.rectangle(
+    (x1+x2)/2,(y1+y2)/2,
+    len+10,13,
+    {
+      isStatic:true,
+      angle:Math.atan2(dy,dx),
+      friction:.8,
+      restitution:.05
+    }
+  );
+}
+
 function rebuildBowl(){
   for(const b of bowlBodies)Composite.remove(engine.world,b);
   bowlBodies=[];
 
-  const g=bowlGeometry();
+  bowl=getBowl();
 
-  const floor=Bodies.rectangle(
-    g.cx,g.bottom+8,g.bottomHalf*2+25,18,
+  // 底
+  bowlBodies.push(Bodies.rectangle(
+    bowl.cx,bowl.bottom+5,
+    bowl.bottomHalf*2+20,18,
     {isStatic:true,friction:.8}
-  );
+  ));
 
-  bowlBodies.push(floor);
+  // 左右のカーブ
+  for(let i=0;i<7;i++){
+    const t1=i/7;
+    const t2=(i+1)/7;
 
-  // 左右の斜めの壁を複数に分けてカーブ風にする
-  for(let i=0;i<4;i++){
-    const t1=i/4;
-    const t2=(i+1)/4;
+    const y1=bowl.top+(bowl.bottom-bowl.top)*t1;
+    const y2=bowl.top+(bowl.bottom-bowl.top)*t2;
+    const x1=bowl.topHalf+(bowl.bottomHalf-bowl.topHalf)*t1;
+    const x2=bowl.topHalf+(bowl.bottomHalf-bowl.topHalf)*t2;
 
-    const y1=g.bottom-(g.bottom-g.top)*t1;
-    const y2=g.bottom-(g.bottom-g.top)*t2;
-
-    const x1=g.bottomHalf+(g.topHalf-g.bottomHalf)*t1;
-    const x2=g.bottomHalf+(g.topHalf-g.bottomHalf)*t2;
-
-    const leftX1=g.cx-x1;
-    const leftX2=g.cx-x2;
-    const rightX1=g.cx+x1;
-    const rightX2=g.cx+x2;
-
-    bowlBodies.push(makeWall(leftX1,y1,leftX2,y2));
-    bowlBodies.push(makeWall(rightX1,y1,rightX2,y2));
+    bowlBodies.push(wallSegment(
+      bowl.cx-x1,y1,bowl.cx-x2,y2
+    ));
+    bowlBodies.push(wallSegment(
+      bowl.cx+x1,y1,bowl.cx+x2,y2
+    ));
   }
 
   Composite.add(engine.world,bowlBodies);
-}
-
-function makeWall(x1,y1,x2,y2){
-  const dx=x2-x1;
-  const dy=y2-y1;
-  const length=Math.sqrt(dx*dx+dy*dy);
-  const angle=Math.atan2(dy,dx);
-
-  return Bodies.rectangle(
-    (x1+x2)/2,(y1+y2)/2,
-    length+8,12,
-    {isStatic:true,angle,friction:.8}
-  );
 }
 
 function updateStats(){
@@ -251,20 +242,21 @@ function createFruit(x,y,level){
   const slippery=document.getElementById("mode").value==="slippery";
   const r=radius(level);
 
-  const body=Bodies.circle(x,y,r,{
-    restitution:slippery?.22:.04,
+  const f=Bodies.circle(x,y,r,{
+    restitution:slippery?.2:.03,
     friction:slippery?.001:.14,
     frictionStatic:slippery?.001:.5,
     frictionAir:slippery?.0001:.018,
     density:.0015
   });
 
-  body.level=level;
-  body.isFruit=true;
-  body.outsideTicks=0;
-  fruits.push(body);
-  Composite.add(engine.world,body);
-  return body;
+  f.level=level;
+  f.isFruit=true;
+  f.outsideTicks=0;
+
+  fruits.push(f);
+  Composite.add(engine.world,f);
+  return f;
 }
 
 function applyMode(){
@@ -274,7 +266,7 @@ function applyMode(){
     f.friction=slippery?.001:.14;
     f.frictionStatic=slippery?.001:.5;
     f.frictionAir=slippery?.0001:.018;
-    f.restitution=slippery?.22:.04;
+    f.restitution=slippery?.2:.03;
   }
 }
 
@@ -286,27 +278,26 @@ function chooseNext(){
 function startCurrent(){
   if(gameOver)return;
   currentLevel=nextLevel;
-  currentX=innerWidth/2;
+  currentX=bowl.cx;
   chooseNext();
 }
 
 function move(dir){
   if(gameOver||dropping)return;
-  currentX=Math.max(25,Math.min(innerWidth-25,currentX+dir*24));
+  currentX=Math.max(15,Math.min(innerWidth-15,currentX+dir*24));
 }
 
 function dropFruit(){
   if(gameOver||dropping)return;
-  const now=Date.now();
-  if(now-lastDrop<180)return;
-  lastDrop=now;
+  if(Date.now()-lastDrop<180)return;
 
+  lastDrop=Date.now();
   dropping=true;
-  const g=bowlGeometry();
+
   createFruit(
-    Math.max(g.cx-g.bottomHalf*.65,
-      Math.min(g.cx+g.bottomHalf*.65,currentX)),
-    g.top-25,
+    Math.max(bowl.cx-bowl.bottomHalf*.7,
+      Math.min(bowl.cx+bowl.bottomHalf*.7,currentX)),
+    bowl.top-20,
     currentLevel
   );
 
@@ -323,8 +314,7 @@ Events.on(engine,"collisionStart",event=>{
     const b=pair.bodyB;
 
     if(!a.isFruit||!b.isFruit)continue;
-    if(a.level!==b.level)continue;
-    if(a.level>=9)continue;
+    if(a.level!==b.level||a.level>=9)continue;
     if(mergeLock.has(a.id)||mergeLock.has(b.id))continue;
 
     mergeLock.add(a.id);
@@ -332,7 +322,7 @@ Events.on(engine,"collisionStart",event=>{
 
     const x=(a.position.x+b.position.x)/2;
     const y=(a.position.y+b.position.y)/2;
-    const level=a.level+1;
+    const newLevel=a.level+1;
 
     setTimeout(()=>{
       if(!fruits.includes(a)||!fruits.includes(b))return;
@@ -344,9 +334,9 @@ Events.on(engine,"collisionStart",event=>{
       mergeLock.delete(a.id);
       mergeLock.delete(b.id);
 
-      createFruit(x,y,level);
+      createFruit(x,y,newLevel);
 
-      score+=(level+1)*10;
+      score+=(newLevel+1)*10;
       if(score>best){
         best=score;
         localStorage.setItem("suikaBest",best);
@@ -356,76 +346,69 @@ Events.on(engine,"collisionStart",event=>{
   }
 });
 
-// ボタンなどを物理的な障害物にする
-function updateObstacles(){
+// UIは固定。衝突用の透明な物理ボディだけを動かす
+function updateUIBodies(){
   const elements=[
-    ...document.querySelectorAll("#controls button, .panel button, .panel select")
+    ...document.querySelectorAll(".panel, #controls button")
   ];
 
-  const active=new Set(elements);
-
-  for(const item of obstacles){
-    if(!active.has(item.element)){
+  for(const item of uiBodies){
+    if(!elements.includes(item.el)){
       Composite.remove(engine.world,item.body);
-      obstacles=obstacles.filter(x=>x!==item);
+      uiBodies=uiBodies.filter(x=>x!==item);
     }
   }
 
   for(const el of elements){
     const rect=el.getBoundingClientRect();
-    if(rect.width<=0||rect.height<=0)continue;
+    if(!rect.width||!rect.height)continue;
 
-    let item=obstacles.find(x=>x.element===el);
+    let item=uiBodies.find(x=>x.el===el);
+
+    const x=rect.left+rect.width/2;
+    const y=rect.top+rect.height/2;
 
     if(!item){
       const body=Bodies.rectangle(
-        rect.left+rect.width/2,
-        rect.top+rect.height/2,
-        rect.width,
-        rect.height,
-        {isStatic:true,friction:.8,restitution:.12}
+        x,y,rect.width,rect.height,
+        {isStatic:true,friction:.7,restitution:.08}
       );
-      item={element:el,body,w:rect.width,h:rect.height};
-      obstacles.push(item);
+      item={el,body,w:rect.width,h:rect.height};
+      uiBodies.push(item);
       Composite.add(engine.world,body);
     }else{
+      Body.setPosition(item.body,{x,y});
       if(Math.abs(item.w-rect.width)>1||
          Math.abs(item.h-rect.height)>1){
         Composite.remove(engine.world,item.body);
         item.body=Bodies.rectangle(
-          rect.left+rect.width/2,
-          rect.top+rect.height/2,
-          rect.width,rect.height,
-          {isStatic:true,friction:.8,restitution:.12}
+          x,y,rect.width,rect.height,
+          {isStatic:true,friction:.7,restitution:.08}
         );
         item.w=rect.width;
         item.h=rect.height;
         Composite.add(engine.world,item.body);
-      }else{
-        Body.setPosition(item.body,{
-          x:rect.left+rect.width/2,
-          y:rect.top+rect.height/2
-        });
       }
     }
   }
 }
 
-// 果物描画
+// 果物の描画
 function drawFruit(f){
   const r=radius(f.level);
+
   ctx.save();
   ctx.translate(f.position.x,f.position.y);
   ctx.rotate(f.angle);
 
   if(f.level===9){
-    // スイカは丸い球体
+    // 丸いスイカ
     const grad=ctx.createRadialGradient(
       -r*.35,-r*.4,1,0,0,r
     );
-    grad.addColorStop(0,"#bce98d");
-    grad.addColorStop(.6,"#55a94d");
-    grad.addColorStop(1,"#236d3a");
+    grad.addColorStop(0,"#c6ed91");
+    grad.addColorStop(.55,"#59ae50");
+    grad.addColorStop(1,"#226b39");
 
     ctx.fillStyle=grad;
     ctx.beginPath();
@@ -437,7 +420,7 @@ function drawFruit(f){
     ctx.arc(0,0,r*.97,0,Math.PI*2);
     ctx.clip();
 
-    ctx.strokeStyle="#26713e";
+    ctx.strokeStyle="#236b3a";
     ctx.lineWidth=Math.max(2,r*.07);
     for(let i=-2;i<=2;i++){
       ctx.beginPath();
@@ -446,13 +429,12 @@ function drawFruit(f){
     }
     ctx.restore();
   }else{
-    // パインを含め、絵文字は普通の見た目にする
-    const size=r*1.55;
+    // 絵文字の余白を当たり判定に影響させない
     ctx.save();
     ctx.beginPath();
     ctx.arc(0,0,r*.94,0,Math.PI*2);
     ctx.clip();
-    ctx.font=`${size}px "Apple Color Emoji","Segoe UI Emoji",serif`;
+    ctx.font=`${r*1.5}px "Apple Color Emoji","Segoe UI Emoji",serif`;
     ctx.textAlign="center";
     ctx.textBaseline="middle";
     ctx.fillText(FRUITS[f.level],0,0);
@@ -465,23 +447,39 @@ function drawFruit(f){
 function draw(){
   ctx.clearRect(0,0,innerWidth,innerHeight);
 
-  // 器の線だけ描画。周りの四角い囲いはなし
-  const g=bowlGeometry();
-  ctx.strokeStyle="#8fa88a";
-  ctx.lineWidth=9;
+  bowl=getBowl();
+
+  // 器の内側
+  ctx.beginPath();
+  ctx.moveTo(bowl.cx-bowl.topHalf,bowl.top);
+  ctx.quadraticCurveTo(
+    bowl.cx-bowl.topHalf*.8,bowl.bottom-35,
+    bowl.cx-bowl.bottomHalf,bowl.bottom
+  );
+  ctx.lineTo(bowl.cx+bowl.bottomHalf,bowl.bottom);
+  ctx.quadraticCurveTo(
+    bowl.cx+bowl.topHalf*.8,bowl.bottom-35,
+    bowl.cx+bowl.topHalf,bowl.top
+  );
+  ctx.closePath();
+  ctx.fillStyle="#dce8d2";
+  ctx.fill();
+
+  // 器の縁
+  ctx.strokeStyle="#63805e";
+  ctx.lineWidth=12;
   ctx.lineCap="round";
   ctx.lineJoin="round";
-
   ctx.beginPath();
-  ctx.moveTo(g.cx-g.topHalf,g.top);
+  ctx.moveTo(bowl.cx-bowl.topHalf,bowl.top);
   ctx.quadraticCurveTo(
-    g.cx-g.topHalf*.85,g.bottom-30,
-    g.cx-g.bottomHalf,g.bottom
+    bowl.cx-bowl.topHalf*.8,bowl.bottom-35,
+    bowl.cx-bowl.bottomHalf,bowl.bottom
   );
-  ctx.lineTo(g.cx+g.bottomHalf,g.bottom);
+  ctx.lineTo(bowl.cx+bowl.bottomHalf,bowl.bottom);
   ctx.quadraticCurveTo(
-    g.cx+g.topHalf*.85,g.bottom-30,
-    g.cx+g.topHalf,g.top
+    bowl.cx+bowl.topHalf*.8,bowl.bottom-35,
+    bowl.cx+bowl.topHalf,bowl.top
   );
   ctx.stroke();
 
@@ -489,10 +487,10 @@ function draw(){
   if(!gameOver&&!dropping){
     const r=radius(currentLevel);
     ctx.globalAlpha=.7;
-    ctx.font=`${r*1.55}px "Apple Color Emoji","Segoe UI Emoji",serif`;
+    ctx.font=`${r*1.5}px "Apple Color Emoji","Segoe UI Emoji",serif`;
     ctx.textAlign="center";
     ctx.textBaseline="middle";
-    ctx.fillText(FRUITS[currentLevel],currentX,g.top-25);
+    ctx.fillText(FRUITS[currentLevel],currentX,bowl.top-20);
     ctx.globalAlpha=1;
   }
 
@@ -501,19 +499,18 @@ function draw(){
   requestAnimationFrame(draw);
 }
 
-// 画面外に落ちたらゲームオーバー
+// 画面外に落ちたら終了
 function checkEscaped(){
   if(gameOver)return;
 
   for(const f of fruits){
     const r=radius(f.level);
-    const outside=
+    if(
       f.position.y>innerHeight+r+10||
       f.position.x<-r-10||
-      f.position.x>innerWidth+r+10;
-
-    if(outside){
-      f.outsideTicks=(f.outsideTicks||0)+1;
+      f.position.x>innerWidth+r+10
+    ){
+      f.outsideTicks++;
       if(f.outsideTicks>8){
         endGame();
         return;
@@ -538,7 +535,7 @@ function restart(){
   score=0;
   gameOver=false;
   dropping=false;
-  currentX=innerWidth/2;
+  currentX=bowl.cx;
 
   document.getElementById("message").style.display="none";
 
@@ -562,7 +559,7 @@ function makeSave(){
     }))
   };
 
-  saveCode="SUIKA4-"+btoa(
+  saveCode="SUIKA5-"+btoa(
     unescape(encodeURIComponent(JSON.stringify(data)))
   );
   document.getElementById("saveInput").value=saveCode;
@@ -571,7 +568,6 @@ function makeSave(){
 function copySave(){
   if(!saveCode)makeSave();
   const input=document.getElementById("saveInput");
-  input.value=saveCode;
   input.select();
   document.execCommand("copy");
   alert("コピーしました！");
@@ -580,7 +576,7 @@ function copySave(){
 function loadSave(){
   try{
     const code=document.getElementById("saveInput").value.trim();
-    if(!code.startsWith("SUIKA4-"))throw new Error();
+    if(!code.startsWith("SUIKA5-"))throw new Error();
 
     const data=JSON.parse(
       decodeURIComponent(escape(atob(code.slice(7))))
@@ -596,18 +592,14 @@ function loadSave(){
     plays=Number(data.plays)||plays;
     currentLevel=Math.max(0,Math.min(9,Number(data.currentLevel)||0));
     nextLevel=Math.max(0,Math.min(9,Number(data.nextLevel)||0));
-    currentX=Math.max(20,Math.min(innerWidth-20,Number(data.currentX)||innerWidth/2));
+    currentX=Number(data.currentX)||bowl.cx;
 
     document.getElementById("mode").value=
       data.mode==="slippery"?"slippery":"normal";
 
     for(const f of data.fruits){
       const level=Math.max(0,Math.min(9,Number(f.level)||0));
-      const body=createFruit(
-        Number(f.x)||innerWidth/2,
-        Number(f.y)||innerHeight/2,
-        level
-      );
+      const body=createFruit(Number(f.x)||bowl.cx,Number(f.y)||bowl.top,level);
       Body.setVelocity(body,{
         x:Number(f.vx)||0,y:Number(f.vy)||0
       });
@@ -640,11 +632,17 @@ window.addEventListener("keydown",e=>{
 },true);
 
 window.addEventListener("resize",resizeCanvas);
+window.addEventListener("scroll",()=>{
+  updateUIBodies();
+  rebuildBowl();
+},{passive:true});
 
 let frame=0;
 function physicsLoop(){
   Engine.update(engine,1000/60);
-  if(frame++%8===0)updateObstacles();
+
+  if(frame++%8===0)updateUIBodies();
+
   checkEscaped();
   requestAnimationFrame(physicsLoop);
 }
@@ -653,7 +651,7 @@ resizeCanvas();
 updateStats();
 chooseNext();
 startCurrent();
-updateObstacles();
+updateUIBodies();
 draw();
 physicsLoop();
 </script>
